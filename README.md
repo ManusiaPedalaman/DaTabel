@@ -39,40 +39,6 @@ Dapur project aplikasi super cepat ini dibangun menggunakan gabungan ekosistem d
 
 ---
 
-## 🚀 Cara Menjalankan (Local Development)
-
-Prosesnya sangat mudah. Anda hanya membutuhkan `Node.js` dan pastikan Anda sudah memiliki API Key dari Google GenAI.
-
-1.  **Clone Repository**
-    ```bash
-    git clone https://github.com/ManusiaPedalaman/DaTabel.git
-    ```
-
-2.  **Masuk ke Direktori**
-    ```bash
-    cd DaTabel
-    ```
-
-3.  **Install Pendukung (Dependencies)**
-    ```bash
-    npm install
-    ```
-
-4.  **Konfigurasi Environment**
-    Buat file bernama `.env.local` pada *root directory*, lalu lengkapi kunci rahasia API Anda di dalamnya:
-    ```env
-    # Masukkan Google Gen AI API key Anda di sini
-    GOOGLE_GENAI_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-    ```
-
-5.  **Nyalakan Mesin Server!**
-    ```bash
-    npm run dev
-    ```
-    Kunjungi [http://localhost:3000](http://localhost:3000) pada browser, dan sambutlah masa depan olah data!
-
----
-
 ## 📂 Struktur Inti Project
 
 ```bash
