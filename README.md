@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📊 DaTabel
 
-## Getting Started
+> **Ubah foto kertas tabel jadi file Excel dalam hitungan detik.**
+> Tanpa input manual. Cukup foto. Sisanya serahkan pada AI mutakhir.
 
-First, run the development server:
+---
+
+<img width="1919" height="913" alt="Screenshot DaTabel Web" src="https://via.placeholder.com/1919x913.png?text=DaTabel+-+The+Best+Place+To+Convert+Paper+Tables+To+Excel" />
+
+---
+
+## 🤖 Tentang Project
+
+**DaTabel** hadir sebagai penyelamat bagi siapa saja yang lelah mengetik ulang baris data dari kertas ke komputer secara manual. Kami tidak hanya mengkonversi gambar; kami memberikan **waktu berharga** kembali kepada Anda.
+
+Project ini lahir dari keresahan akan lambatnya proses administrasi dan _data entry_. Dibangun dengan fokus pada **Keakuratan** dan **Kecepatan** tingkat tinggi. Kami sangat mengerti bahwa menyalin ratusan baris data dari kuitansi, faktur, laporan cetak, atau buku tabungan adalah sebuah mimpi buruk. DaTabel adalah antitesis dari membuang-buang waktu tersebut.
+
+### ✨ Fitur Utama
+
+*   **📸 Unggah dan Jepret Langsung:** Mendukung multi-input, dari mulai file komputer hingga jepretan kamera _smartphone_ secara *real-time*.
+*   **🧠 Ekstraksi AI Super Pintar (V2):** Ditenagai oleh *Generative AI* untuk membaca, mempelajari, lalu menstrukturkan tabel cetakan paling berantakan sekalipun dengan presisi tinggi.
+*   **⚡ Konversi Massal Tanpa Lag:** Lapar data? Olah hingga **5 file dokumen** gambar/PDF sekaligus. Karena data besar tidak bisa menunggu.
+*   **👀 Live Data Preview:** Cek, tinjau, dan pastikan data tabel sudah rapi di _browser_ tanpa harus mendownloadnya terlebih dahulu.
+*   **📦 Unduhan Fleksibel & Cepat:** Dapatkan hasil bersih secara kilat dalam wujud *file* Excel (.csv). Jika mengolah banyak data? Kami satukan dalam paket `.zip`.
+*   **📋 Salin Praktis (Copy-to-Clipboard):** Tinggal klik "Copy", lalu tempel (*paste*) sekejap mata pada Microsoft Excel atau Google Sheets.
+
+---
+
+## 🛠️ Tech Stack
+
+Dapur project aplikasi super cepat ini dibangun menggunakan gabungan ekosistem dan teknologi web termodern tahun ini:
+
+*   **Core:** [Next.js](https://nextjs.org/) (App Router) & [React 19](https://react.dev/)
+*   **Styling Utama:** [Tailwind CSS v4](https://tailwindcss.com/) (Menghadirkan Dark/Light Theme yang memukau)
+*   **Animasi:** [Framer Motion](https://www.framer.com/motion/) yang memastikan *micro-actions* berjalan sangat mulus
+*   **Mesin Kecerdasan:** [Google GenAI](https://ai.google.dev/) API (The Brain of DaTabel)
+*   **Utilitas Pendukung:** [JSZip](https://stuk.github.io/jszip/) (untuk ekstraksi ZIP seketika) & [Lenis](https://lenis.darkroom.engineering/) (Smooth Scroll UI)
+*   **Ikonografi:** [Lucide React](https://lucide.dev/)
+
+---
+
+## 🚀 Cara Menjalankan (Local Development)
+
+Prosesnya sangat mudah. Anda hanya membutuhkan `Node.js` dan pastikan Anda sudah memiliki API Key dari Google GenAI.
+
+1.  **Clone Repository**
+    ```bash
+    git clone https://github.com/ManusiaPedalaman/DaTabel.git
+    ```
+
+2.  **Masuk ke Direktori**
+    ```bash
+    cd DaTabel
+    ```
+
+3.  **Install Pendukung (Dependencies)**
+    ```bash
+    npm install
+    ```
+
+4.  **Konfigurasi Environment**
+    Buat file bernama `.env.local` pada *root directory*, lalu lengkapi kunci rahasia API Anda di dalamnya:
+    ```env
+    # Masukkan Google Gen AI API key Anda di sini
+    GOOGLE_GENAI_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    ```
+
+5.  **Nyalakan Mesin Server!**
+    ```bash
+    npm run dev
+    ```
+    Kunjungi [http://localhost:3000](http://localhost:3000) pada browser, dan sambutlah masa depan olah data!
+
+---
+
+## 📂 Struktur Inti Project
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+.
+├── app/
+│   ├── api/                 # Jantung pemrosesan backend konversi file
+│   ├── landing page/        # Pembangun UI utama (Komponen Hero, Fitur, dll)
+│   ├── globals.css          # Basis tema penataan global (Tailwind)
+│   ├── layout.tsx           # Kerangka metadata global web
+│   └── page.tsx             # Pintu masuk utama untuk pengunjung
+├── components/              # Komponen tambahan (Animations, Wrapper)
+├── package.json             # Dokumentasi paket modul
+└── README.md                # Anda ada di sini :)
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

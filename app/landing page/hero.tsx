@@ -61,9 +61,9 @@ export default function Hero() {
       const data = await response.json();
       setConversionResults(data.results);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading file:", error);
-      alert("Terjadi kesalahan saat mengkonversi gambar.");
+      alert(error.message || "Terjadi kesalahan saat mengkonversi gambar.");
     } finally {
       setIsUploading(false);
     }

@@ -15,16 +15,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Maximum 5 files allowed" }, { status: 400 });
     }
 
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "GEMINI_API_KEY environment variable is not configured." }, { status: 500 });
+    }
+
     // 2. Hubungi Gemini AI menggunakan API Key
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     
     // 3. Berikan instruksi (prompt) ke Gemini
-    const prompt = "Please convert this table image into structured CSV data. Return ONLY the raw CSV text without markdown blocks.";
+    const prompt = "You are a table extraction AI. Extract the tabular data from the image into clean CSV format. Output ONLY the CSV rows (header and data). Do NOT include any intro text, title, preamble, markdown formatting, backticks, or comments.";
     
     // Process all files in parallel
     const conversionPromises = files.map(async (file) => {
         const arrayBuffer = await file.arrayBuffer();
         const base64Data = Buffer.from(arrayBuffer).toString('base64');
+
+        let mimeType = file.type;
+        if (!mimeType || mimeType === 'application/octet-stream') {
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext === 'pdf') mimeType = 'application/pdf';
+          else if (ext === 'png') mimeType = 'image/png';
+          else if (ext === 'webp') mimeType = 'image/webp';
+          else mimeType = 'image/jpeg';
+        }
 
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -33,12 +47,24 @@ export async function POST(req: NextRequest) {
               {
                 inlineData: {
                   data: base64Data,
-                  mimeType: file.type
+                  mimeType: mimeType
                 }
               }
             ]
         });
-        return response.text;
+
+        let text = response.text || "";
+        // Clean markdown code fences if present
+        text = text.replace(/^```(?:csv)?\s*/gi, '').replace(/\s*```$/gi, '').trim();
+
+        // If preamble exists before table headers, strip preamble lines
+        const lines = text.split('\n');
+        const firstCsvLineIndex = lines.findIndex(line => line.includes(',') || line.includes(';') || line.includes('\t'));
+        if (firstCsvLineIndex > 0) {
+          text = lines.slice(firstCsvLineIndex).join('\n');
+        }
+
+        return text;
     });
 
     const results = await Promise.all(conversionPromises);
@@ -46,8 +72,10 @@ export async function POST(req: NextRequest) {
     // 4. Kembalikan array data rapi ke tampilan layar depan pengguna
     return NextResponse.json({ results });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
-    return NextResponse.json({ error: "Failed to process image(s) with AI" }, { status: 500 });
+    return NextResponse.json({ error: error?.message || "Failed to process image(s) with AI" }, { status: 500 });
   }
 }
+
+
