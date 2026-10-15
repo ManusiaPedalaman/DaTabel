@@ -13,8 +13,23 @@ export default function Hero() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [conversionResults, setConversionResults] = useState<string[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
+  const [activeTableIndex, setActiveTableIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const parseCsvRows = (csvText: string): string[][] => {
+    try {
+      const wb = XLSX.read(csvText, { type: "string", raw: true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
+      if (rows && rows.length > 0) {
+        return rows.map(r => (Array.isArray(r) ? r.map(c => (c !== undefined && c !== null ? String(c).trim() : '')) : []));
+      }
+    } catch (e) {
+      console.warn("XLSX parsing failed, falling back to line split:", e);
+    }
+    return csvText.trim().split('\n').map(r => r.split(',').map(c => c.replace(/['"]+/g, '').trim()));
+  };
 
   const handleFileSelect = (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
@@ -99,6 +114,7 @@ export default function Hero() {
       setSelectedFiles([]);
       setConversionResults([]);
       setPreviewVisible(false);
+      setActiveTableIndex(0);
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
@@ -115,7 +131,7 @@ export default function Hero() {
       const result = conversionResults[index];
       if (!result) return;
       try {
-          const wb = XLSX.read(result, { type: "string" });
+          const wb = XLSX.read(result, { type: "string", raw: true });
           const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
           const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
           const url = URL.createObjectURL(blob);
@@ -191,7 +207,7 @@ export default function Hero() {
           className="absolute top-0 left-1/2 -translate-x-1/2 -mt-10 w-64 h-64 bg-primary/10 rounded-full blur-3xl -z-0"
         />
 
-        <div className="space-y-6 max-w-2xl z-10 flex flex-col items-center w-full min-w-0">
+        <div className={`space-y-6 z-10 flex flex-col items-center w-full min-w-0 transition-all duration-300 ${conversionResults.length > 0 ? 'max-w-5xl' : 'max-w-2xl'}`}>
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -406,62 +422,135 @@ export default function Hero() {
                 </button>
 
                 {/* Preview Grid */}
-                {previewVisible && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      className="w-full max-w-full bg-white dark:bg-card border border-border/50 rounded-2xl shadow-sm text-left overflow-hidden min-w-0"
-                    >
-                        <div className="bg-muted px-4 py-3 border-b border-border/50 flex items-center justify-between">
-                            <h3 className="font-semibold text-sm">Data Preview</h3>
-                            <div className="flex gap-2">
-                                <button onClick={handleDownload} className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md font-medium transition-colors">Download</button>
-                                <button onClick={handleCopy} className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-3 py-1 rounded-md font-medium transition-colors">Copy</button>
-                            </div>
-                        </div>
-                        <div className="flex flex-row overflow-x-auto snap-x snap-mandatory custom-scrollbar w-full pb-4">
-                            {conversionResults.map((result, index) => (
-                                <div key={index} className="w-[90%] sm:w-[80%] shrink-0 snap-center px-4 pt-4 first:pl-4 last:pr-4">
-                                    <div className="mb-2 font-semibold text-primary text-sm flex items-center justify-between">
-                                        <div className="flex items-center gap-2 truncate max-w-[200px] sm:max-w-[300px]">
-                                            <CheckCircle2 className="w-4 h-4 shrink-0" /> 
-                                            <span className="truncate">{selectedFiles[index]?.name || `Table ${index + 1}`}</span>
-                                        </div>
-                                        <button 
-                                          onClick={() => downloadSingleTable(index)}
-                                          className="text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded-md font-medium transition-colors flex items-center gap-1 shrink-0"
-                                          title="Download table as Excel (.xlsx)"
-                                        >
-                                          <Download className="w-3 h-3" />
-                                          <span>Excel (.xlsx)</span>
-                                        </button>
-                                    </div>
-                                    <div className="p-0 overflow-x-auto custom-scrollbar w-full max-w-full block border border-border/50 rounded-lg">
-                                        <table className="w-full text-sm text-left whitespace-nowrap min-w-max">
-                                             <thead className="text-xs text-muted-foreground bg-muted/30 sticky top-0 z-10 shadow-sm">
-                                                 <tr>
-                                                     {/* Simple CSV parsing logic for preview */}
-                                                     {result.trim().split('\n')[0]?.split(',').map((header, idx) => (
-                                                         <th key={idx} className="px-4 py-3 border-b border-border/50 font-semibold">{header.replace(/['"]+/g, '') || `Col ${idx + 1}`}</th>
-                                                     ))}
-                                                 </tr>
-                                             </thead>
-                                             <tbody className="divide-y divide-border/50">
-                                                 {result.trim().split('\n').slice(1).map((row, rowIndex) => (
-                                                     <tr key={rowIndex} className="hover:bg-muted/30 transition-colors">
-                                                         {row.split(',').map((cell, cellIndex) => (
-                                                             <td key={cellIndex} className="px-4 py-3 border-r border-border/50 last:border-r-0">{cell.replace(/['"]+/g, '')}</td>
-                                                         ))}
-                                                     </tr>
-                                                 ))}
-                                             </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </motion.div>
-                )}
+                {previewVisible && (() => {
+                    const activeResult = conversionResults[activeTableIndex] || conversionResults[0] || '';
+                    const parsedRows = parseCsvRows(activeResult);
+                    const headers = parsedRows[0] || [];
+                    const bodyRows = parsedRows.slice(1);
+
+                    return (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="w-full max-w-full bg-white dark:bg-card border border-border/50 rounded-2xl shadow-sm text-left overflow-hidden min-w-0"
+                      >
+                          {/* Preview Card Header */}
+                          <div className="bg-muted px-4 py-3 border-b border-border/50 flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                  <h3 className="font-bold text-sm text-foreground">Data Preview</h3>
+                                  <span className="text-xs text-muted-foreground bg-background/80 px-2 py-0.5 rounded-full border border-border/50">
+                                      {bodyRows.length} baris
+                                  </span>
+                              </div>
+                              <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => downloadSingleTable(activeTableIndex)} 
+                                    className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+                                  >
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>Download Excel (.xlsx)</span>
+                                  </button>
+                                  <button 
+                                    onClick={handleCopy} 
+                                    className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1"
+                                  >
+                                      <Copy className="w-3.5 h-3.5" />
+                                      <span>Copy</span>
+                                  </button>
+                              </div>
+                          </div>
+
+                          {/* Multi-table Tabs (if multiple files uploaded) */}
+                          {conversionResults.length > 1 && (
+                              <div className="flex items-center gap-2 overflow-x-auto p-2.5 bg-muted/30 border-b border-border/50 custom-scrollbar">
+                                  {conversionResults.map((_, idx) => (
+                                      <button
+                                          key={idx}
+                                          onClick={() => setActiveTableIndex(idx)}
+                                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                                              activeTableIndex === idx
+                                                  ? 'bg-primary text-primary-foreground shadow-sm'
+                                                  : 'bg-background hover:bg-muted text-muted-foreground border border-border/60'
+                                          }`}
+                                      >
+                                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                                          <span className="truncate max-w-[130px] sm:max-w-[200px]">
+                                              {selectedFiles[idx]?.name || `Tabel ${idx + 1}`}
+                                          </span>
+                                      </button>
+                                  ))}
+                              </div>
+                          )}
+
+                          {/* Current File Header & Mobile Scroll Hint */}
+                          <div className="px-4 py-2 bg-muted/10 border-b border-border/40 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                              <div className="flex items-center gap-1.5 text-primary font-medium truncate">
+                                  <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                                  <span className="truncate">{selectedFiles[activeTableIndex]?.name || `Tabel ${activeTableIndex + 1}`}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <span className="hidden sm:inline">Tabel responsif: geser horizontal untuk melihat semua kolom</span>
+                                  <span className="sm:hidden">👈 Geser tabel ke kanan/kiri 👉</span>
+                                  <span className="font-semibold text-primary ml-1">({headers.length} Kolom)</span>
+                              </div>
+                          </div>
+
+                          {/* Fully Responsive Scrollable Table */}
+                          <div className="p-0 overflow-x-auto custom-scrollbar w-full max-w-full block overscroll-x-contain">
+                              <table className="w-full text-xs sm:text-sm text-left border-collapse min-w-max">
+                                   <thead className="text-[11px] sm:text-xs text-muted-foreground bg-muted/80 backdrop-blur-md sticky top-0 z-10 shadow-sm border-b border-border/60">
+                                       <tr>
+                                           {headers.map((header, idx) => (
+                                               <th 
+                                                 key={idx} 
+                                                 className={`px-4 py-3 font-bold border-r border-border/40 last:border-r-0 ${
+                                                    idx === 0 
+                                                      ? 'text-center w-12 min-w-[50px]' 
+                                                      : idx === 1 
+                                                        ? 'min-w-[180px]' 
+                                                        : 'text-center min-w-[80px]'
+                                                 }`}
+                                               >
+                                                   {header || `Kol ${idx + 1}`}
+                                               </th>
+                                           ))}
+                                       </tr>
+                                   </thead>
+                                   <tbody className="divide-y divide-border/40 text-foreground">
+                                       {bodyRows.map((row, rowIndex) => (
+                                           <tr key={rowIndex} className="hover:bg-primary/5 transition-colors even:bg-muted/15">
+                                               {headers.map((_, cellIndex) => {
+                                                   const cell = row[cellIndex] ?? '';
+                                                   const isCheck = cell === '✓' || cell.toLowerCase() === 'v' || cell === 'âœ“';
+                                                   return (
+                                                       <td 
+                                                         key={cellIndex} 
+                                                         className={`px-4 py-2.5 border-r border-border/40 last:border-r-0 ${
+                                                            cellIndex === 0 
+                                                              ? 'text-center font-mono text-muted-foreground font-semibold bg-muted/10' 
+                                                              : cellIndex === 1 
+                                                                ? 'font-medium max-w-[240px] truncate' 
+                                                                : 'text-center'
+                                                         }`}
+                                                       >
+                                                           {isCheck ? (
+                                                               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-500/15 text-green-600 dark:text-green-400 font-bold text-xs">
+                                                                   ✓
+                                                               </span>
+                                                           ) : (
+                                                               cell !== '' ? cell : <span className="text-muted-foreground/30">-</span>
+                                                           )}
+                                                       </td>
+                                                   );
+                                               })}
+                                           </tr>
+                                       ))}
+                                   </tbody>
+                              </table>
+                          </div>
+                      </motion.div>
+                    );
+                })()}
              </motion.div>
           )}
 
