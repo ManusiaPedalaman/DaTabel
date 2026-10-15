@@ -25,6 +25,34 @@ export async function POST(req: NextRequest) {
     
     // 3. Berikan instruksi (prompt) ke Gemini
     const prompt = "You are a table extraction AI. Extract the tabular data from the image into clean CSV format. Output ONLY the CSV rows (header and data). Do NOT include any intro text, title, preamble, markdown formatting, backticks, or comments.";
+
+    // Fallback models if primary model is experiencing high demand (503)
+    const candidateModels = ['gemini-2.5-flash', 'gemini-3.5-flash-lite'];
+
+    const generateContentWithRetry = async (contents: any) => {
+      let lastError: any = null;
+      for (const model of candidateModels) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            return await ai.models.generateContent({
+              model,
+              contents,
+            });
+          } catch (err: any) {
+            lastError = err;
+            const errMsg = String(err?.message || '');
+            if (errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE') || errMsg.includes('429')) {
+              // Wait 1.5s before retry or fallback
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+              continue;
+            }
+            // For other errors, break attempt loop and try next candidate model
+            break;
+          }
+        }
+      }
+      throw lastError;
+    };
     
     // Process all files in parallel
     const conversionPromises = files.map(async (file) => {
@@ -40,18 +68,15 @@ export async function POST(req: NextRequest) {
           else mimeType = 'image/jpeg';
         }
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [
-              prompt, 
-              {
-                inlineData: {
-                  data: base64Data,
-                  mimeType: mimeType
-                }
-              }
-            ]
-        });
+        const response = await generateContentWithRetry([
+          prompt, 
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType
+            }
+          }
+        ]);
 
         let text = response.text || "";
         // Clean markdown code fences if present
@@ -74,7 +99,21 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    return NextResponse.json({ error: error?.message || "Failed to process image(s) with AI" }, { status: 500 });
+    let errorMessage = error?.message || "Failed to process image(s) with AI";
+    try {
+      const parsed = JSON.parse(errorMessage);
+      if (parsed?.error?.message) {
+        errorMessage = parsed.error.message;
+      }
+    } catch {
+      // not JSON string, keep as is
+    }
+
+    if (errorMessage.includes("high demand") || errorMessage.includes("503")) {
+      errorMessage = "Server AI sedang mengalami lonjakan trafik yang tinggi. Silakan tunggu beberapa detik dan coba lagi.";
+    }
+
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
 
