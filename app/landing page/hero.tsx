@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { FadeIn } from "@/components/FadeIn";
 import { useState, useRef } from "react";
 import JSZip from "jszip";
+import * as XLSX from "xlsx";
 
 export default function Hero() {
   const [isDragging, setIsDragging] = useState(false);
@@ -110,35 +111,50 @@ export default function Hero() {
       }
   };
 
+  const downloadSingleTable = (index: number) => {
+      const result = conversionResults[index];
+      if (!result) return;
+      try {
+          const wb = XLSX.read(result, { type: "string" });
+          const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+          const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.setAttribute("href", url);
+          const originalName = selectedFiles[index]?.name ? selectedFiles[index].name.replace(/\.[^/.]+$/, "") : `table_${index + 1}`;
+          link.setAttribute("download", `${originalName}.xlsx`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+      } catch (e) {
+          console.error("Error exporting Excel:", e);
+          alert("Gagal mengunduh file Excel.");
+      }
+  };
+
   const handleDownload = async () => {
       if (conversionResults.length === 0) return;
 
       if (conversionResults.length === 1) {
-          // Single file download (CSV)
-          const blob = new Blob([conversionResults[0]], { type: 'text/csv;charset=utf-8;' });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.setAttribute("href", url);
-          const fileName = selectedFiles[0]?.name ? selectedFiles[0].name.replace(/\.[^/.]+$/, "") + ".csv" : `databel_result_${Date.now()}.csv`;
-          link.setAttribute("download", fileName);
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          // Single file download as genuine .xlsx
+          downloadSingleTable(0);
       } else {
-          // Multiple files download (ZIP)
+          // Multiple files download (ZIP containing .xlsx files)
           try {
               const zip = new JSZip();
               
               conversionResults.forEach((result, index) => {
                   const originalName = selectedFiles[index]?.name ? selectedFiles[index].name.replace(/\.[^/.]+$/, "") : `table_${index + 1}`;
-                  zip.file(`${originalName}.csv`, result);
+                  const wb = XLSX.read(result, { type: "string" });
+                  const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+                  zip.file(`${originalName}.xlsx`, excelBuffer);
               });
               
               const content = await zip.generateAsync({ type: "blob" });
               const url = URL.createObjectURL(content);
               const link = document.createElement("a");
               link.setAttribute("href", url);
-              link.setAttribute("download", `databel_results_${Date.now()}.zip`);
+              link.setAttribute("download", `databel_excel_${Date.now()}.zip`);
               document.body.appendChild(link);
               link.click();
               document.body.removeChild(link);
@@ -406,9 +422,19 @@ export default function Hero() {
                         <div className="flex flex-row overflow-x-auto snap-x snap-mandatory custom-scrollbar w-full pb-4">
                             {conversionResults.map((result, index) => (
                                 <div key={index} className="w-[90%] sm:w-[80%] shrink-0 snap-center px-4 pt-4 first:pl-4 last:pr-4">
-                                    <div className="mb-2 font-semibold text-primary text-sm flex items-center gap-2">
-                                        <CheckCircle2 className="w-4 h-4" /> 
-                                        {selectedFiles[index]?.name || `Table ${index + 1}`}
+                                    <div className="mb-2 font-semibold text-primary text-sm flex items-center justify-between">
+                                        <div className="flex items-center gap-2 truncate max-w-[200px] sm:max-w-[300px]">
+                                            <CheckCircle2 className="w-4 h-4 shrink-0" /> 
+                                            <span className="truncate">{selectedFiles[index]?.name || `Table ${index + 1}`}</span>
+                                        </div>
+                                        <button 
+                                          onClick={() => downloadSingleTable(index)}
+                                          className="text-xs bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded-md font-medium transition-colors flex items-center gap-1 shrink-0"
+                                          title="Download table as Excel (.xlsx)"
+                                        >
+                                          <Download className="w-3 h-3" />
+                                          <span>Excel (.xlsx)</span>
+                                        </button>
                                     </div>
                                     <div className="p-0 overflow-x-auto custom-scrollbar w-full max-w-full block border border-border/50 rounded-lg">
                                         <table className="w-full text-sm text-left whitespace-nowrap min-w-max">
