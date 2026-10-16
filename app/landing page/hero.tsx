@@ -133,18 +133,49 @@ export default function Hero() {
       try {
           const wb = XLSX.read(result, { type: "string", raw: true });
           const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-          const blob = new Blob([excelBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-          const url = URL.createObjectURL(blob);
+          const blob = new Blob([excelBuffer], { 
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" 
+          });
+          const url = window.URL.createObjectURL(blob);
           const link = document.createElement("a");
-          link.setAttribute("href", url);
-          const originalName = selectedFiles[index]?.name ? selectedFiles[index].name.replace(/\.[^/.]+$/, "") : `table_${index + 1}`;
-          link.setAttribute("download", `${originalName}.xlsx`);
+          link.href = url;
+          const rawName = selectedFiles[index]?.name ? selectedFiles[index].name.replace(/\.[^/.]+$/, "") : `table_${index + 1}`;
+          const cleanName = rawName.replace(/[/\\?%*:|"<>]/g, '_').trim();
+          link.setAttribute("download", `${cleanName}.xlsx`);
           document.body.appendChild(link);
           link.click();
-          document.body.removeChild(link);
+          setTimeout(() => {
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+          }, 300);
       } catch (e) {
           console.error("Error exporting Excel:", e);
           alert("Gagal mengunduh file Excel.");
+      }
+  };
+
+  const downloadSingleCsv = (index: number) => {
+      const result = conversionResults[index];
+      if (!result) return;
+      try {
+          // Add UTF-8 BOM so Excel opens CSV without character corruption
+          const bom = "\uFEFF";
+          const blob = new Blob([bom + result], { type: 'text/csv;charset=utf-8;' });
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          const rawName = selectedFiles[index]?.name ? selectedFiles[index].name.replace(/\.[^/.]+$/, "") : `table_${index + 1}`;
+          const cleanName = rawName.replace(/[/\\?%*:|"<>]/g, '_').trim();
+          link.setAttribute("download", `${cleanName}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          setTimeout(() => {
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+          }, 300);
+      } catch (e) {
+          console.error("Error exporting CSV:", e);
+          alert("Gagal mengunduh file CSV.");
       }
   };
 
@@ -160,20 +191,24 @@ export default function Hero() {
               const zip = new JSZip();
               
               conversionResults.forEach((result, index) => {
-                  const originalName = selectedFiles[index]?.name ? selectedFiles[index].name.replace(/\.[^/.]+$/, "") : `table_${index + 1}`;
-                  const wb = XLSX.read(result, { type: "string" });
+                  const rawName = selectedFiles[index]?.name ? selectedFiles[index].name.replace(/\.[^/.]+$/, "") : `table_${index + 1}`;
+                  const cleanName = rawName.replace(/[/\\?%*:|"<>]/g, '_').trim();
+                  const wb = XLSX.read(result, { type: "string", raw: true });
                   const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-                  zip.file(`${originalName}.xlsx`, excelBuffer);
+                  zip.file(`${cleanName}.xlsx`, excelBuffer);
               });
               
               const content = await zip.generateAsync({ type: "blob" });
-              const url = URL.createObjectURL(content);
+              const url = window.URL.createObjectURL(content);
               const link = document.createElement("a");
-              link.setAttribute("href", url);
+              link.href = url;
               link.setAttribute("download", `databel_excel_${Date.now()}.zip`);
               document.body.appendChild(link);
               link.click();
-              document.body.removeChild(link);
+              setTimeout(() => {
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+              }, 300);
           } catch (error) {
               console.error("Error creating ZIP file:", error);
               alert("Gagal membuat file ZIP.");
@@ -212,9 +247,9 @@ export default function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="inline-flex items-center gap-1 rounded-full bg-secondary/20 px-3 py-1 text-xs font-semibold text-secondary-foreground dark:text-secondary transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-full bg-secondary/20 px-3.5 py-1 text-xs font-semibold text-secondary-foreground dark:text-secondary transition-colors"
           >
-            <span>New AI Engine V2</span>
+            <span>New AI Engine V2.2 (Native Excel .xlsx)</span>
             <MoveRight className="w-3 h-3" />
           </motion.div>
           
@@ -388,7 +423,7 @@ export default function Hero() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 w-full">
+                    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 w-full">
                         <button 
                           onClick={() => setPreviewVisible(!previewVisible)}
                           className={`w-full sm:w-auto justify-center h-10 px-4 rounded-full font-medium text-sm transition-all flex items-center gap-2 ${previewVisible ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
@@ -408,8 +443,17 @@ export default function Hero() {
                           className="w-full sm:w-auto justify-center h-10 px-5 rounded-full bg-green-600 text-white font-bold text-sm hover:bg-green-700 shadow-lg shadow-green-600/20 transition-all flex items-center gap-2"
                         >
                            <Download className="w-4 h-4" />
-                           Download All
+                           <span>{selectedFiles.length === 1 ? "Download Excel (.xlsx)" : "Download Semua (.zip)"}</span>
                         </button>
+                        {selectedFiles.length === 1 && (
+                            <button 
+                              onClick={() => downloadSingleCsv(0)}
+                              className="w-full sm:w-auto justify-center h-10 px-4 rounded-full border border-border bg-background hover:bg-muted text-muted-foreground font-medium text-xs transition-all flex items-center gap-1.5"
+                              title="Download sebagai CSV"
+                            >
+                               <span>Unduh CSV</span>
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -442,13 +486,20 @@ export default function Hero() {
                                       {bodyRows.length} baris
                                   </span>
                               </div>
-                              <div className="flex gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                   <button 
                                     onClick={() => downloadSingleTable(activeTableIndex)} 
                                     className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
                                   >
                                       <Download className="w-3.5 h-3.5" />
                                       <span>Download Excel (.xlsx)</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => downloadSingleCsv(activeTableIndex)} 
+                                    className="text-xs bg-background hover:bg-muted text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 border border-border/60"
+                                    title="Download format CSV"
+                                  >
+                                      <span>CSV</span>
                                   </button>
                                   <button 
                                     onClick={handleCopy} 
