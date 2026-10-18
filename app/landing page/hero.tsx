@@ -1,34 +1,282 @@
 "use client";
 
-import { Upload, Camera, MoveRight, FileUp, X, FileSpreadsheet, Download, Copy, Eye, RotateCcw, CheckCircle2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { 
+  Upload, 
+  Camera, 
+  MoveRight, 
+  FileUp, 
+  X, 
+  FileSpreadsheet, 
+  Download, 
+  Copy, 
+  Eye, 
+  RotateCcw, 
+  CheckCircle2, 
+  AlertTriangle, 
+  AlertCircle, 
+  Info 
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { FadeIn } from "@/components/FadeIn";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import JSZip from "jszip";
-import * as XLSX from "xlsx";
+
+export interface CellData {
+  text: string;
+  bg_color?: string | null;
+  text_color?: string | null;
+  bold?: boolean;
+  align?: 'left' | 'center' | 'right';
+  border?: boolean;
+  col_span?: number;
+}
+
+export interface TableData {
+  title?: string;
+  has_all_borders: boolean;
+  border_color?: string | null;
+  rows: CellData[][];
+}
+
+export interface ModalNotification {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  type?: 'info' | 'warning' | 'error' | 'success';
+}
 
 export default function Hero() {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [conversionResults, setConversionResults] = useState<string[]>([]);
+  const [conversionResults, setConversionResults] = useState<any[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [activeTableIndex, setActiveTableIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [modalNotification, setModalNotification] = useState<ModalNotification | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
-  const parseCsvRows = (csvText: string): string[][] => {
-    try {
-      const wb = XLSX.read(csvText, { type: "string", raw: true });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true }) as any[][];
-      if (rows && rows.length > 0) {
-        return rows.map(r => (Array.isArray(r) ? r.map(c => (c !== undefined && c !== null ? String(c).trim() : '')) : []));
+  // Typewriter animation words: "Paper Tables", "jpeg", "jpg", "png", "webp", "pdf"
+  const typingWords = ["Paper Tables", "jpeg", "jpg", "png", "webp", "pdf"];
+  const [wordIndex, setWordIndex] = useState(0);
+  const [typedText, setTypedText] = useState("Paper Tables");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const currentWord = typingWords[wordIndex];
+    let timer: NodeJS.Timeout;
+
+    if (!isDeleting) {
+      if (typedText.length < currentWord.length) {
+        timer = setTimeout(() => {
+          setTypedText(currentWord.substring(0, typedText.length + 1));
+        }, 110);
+      } else {
+        timer = setTimeout(() => {
+          setIsDeleting(true);
+        }, 2200);
       }
-    } catch (e) {
-      console.warn("XLSX parsing failed, falling back to line split:", e);
+    } else {
+      if (typedText.length > 0) {
+        timer = setTimeout(() => {
+          setTypedText(currentWord.substring(0, typedText.length - 1));
+        }, 55);
+      } else {
+        setIsDeleting(false);
+        setWordIndex((prev) => (prev + 1) % typingWords.length);
+      }
     }
-    return csvText.trim().split('\n').map(r => r.split(',').map(c => c.replace(/['"]+/g, '').trim()));
+
+    return () => clearTimeout(timer);
+  }, [typedText, isDeleting, wordIndex]);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setModalNotification(null);
+      }
+    };
+    if (modalNotification?.isOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [modalNotification?.isOpen]);
+
+  const showAlert = (message: string, options?: { title?: string; type?: 'info' | 'warning' | 'error' | 'success' }) => {
+    setModalNotification({
+      isOpen: true,
+      title: options?.title || (options?.type === 'error' ? 'Terjadi Kesalahan' : options?.type === 'warning' ? 'Perhatian' : options?.type === 'success' ? 'Berhasil' : 'Pemberitahuan'),
+      message,
+      type: options?.type || 'info',
+    });
+  };
+
+  const normalizeTableData = (raw: any): TableData => {
+    if (!raw) {
+      return { has_all_borders: true, border_color: '#C48B80', rows: [] };
+    }
+
+    if (typeof raw === 'object' && Array.isArray(raw.rows)) {
+      return {
+        title: typeof raw.title === 'string' ? raw.title : undefined,
+        has_all_borders: Boolean(raw.has_all_borders ?? true),
+        border_color: typeof raw.border_color === 'string' && raw.border_color.startsWith('#') ? raw.border_color : '#C48B80',
+        rows: raw.rows.map((row: any[]) =>
+          Array.isArray(row)
+            ? row.map((cell: any) =>
+                typeof cell === 'object' && cell !== null
+                  ? {
+                      text: String(cell.text ?? ''),
+                      bg_color: cell.bg_color || null,
+                      text_color: cell.text_color || null,
+                      bold: Boolean(cell.bold),
+                      align: cell.align || 'left',
+                      border: cell.border !== undefined ? Boolean(cell.border) : true,
+                      col_span: typeof cell.col_span === 'number' && cell.col_span > 1 ? cell.col_span : 1,
+                    }
+                  : {
+                      text: String(cell ?? ''),
+                      bg_color: null,
+                      text_color: null,
+                      bold: false,
+                      align: 'left',
+                      border: true,
+                      col_span: 1,
+                    }
+              )
+            : []
+        ),
+      };
+    }
+
+    if (typeof raw === 'string') {
+      const lines = raw.trim().split('\r\n').filter(l => l.trim().length > 0);
+      const rows = lines.map((line, rIdx) => {
+        const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+        return parts.map((val, cIdx) => ({
+          text: val.replace(/^["']|["']$/g, '').trim(),
+          bg_color: null,
+          text_color: null,
+          bold: rIdx === 0,
+          align: cIdx === 0 ? ('center' as const) : ('left' as const),
+          border: true,
+          col_span: 1,
+        }));
+      });
+      return {
+        has_all_borders: true,
+        border_color: '#C48B80',
+        rows,
+      };
+    }
+
+    return { has_all_borders: true, border_color: '#C48B80', rows: [] };
+  };
+
+  const toCsvString = (table: TableData): string => {
+    return table.rows
+      .map(row =>
+        row
+          .map(cell => {
+            const t = (cell.text || '').replace(/"/g, '""');
+            return t.includes(',') || t.includes('\r\n') || t.includes('"') ? `"${t}"` : t;
+          })
+          .join(',')
+      )
+      .join('\r\n');
+  };
+
+  const generateExcelBuffer = async (table: TableData): Promise<ArrayBuffer> => {
+    const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(table.title ? table.title.substring(0, 30) : 'DataTabel');
+
+    const toArgb = (hex?: string | null): string | undefined => {
+      if (!hex) return undefined;
+      const clean = hex.replace('#', '').trim().toUpperCase();
+      if (clean.length === 6) return 'FF' + clean;
+      if (clean.length === 8) return clean;
+      return undefined;
+    };
+
+    const borderColorArgb = toArgb(table.border_color) || 'FFC48B80';
+    const defaultBorder = {
+      top: { style: 'thin' as const, color: { argb: borderColorArgb } },
+      left: { style: 'thin' as const, color: { argb: borderColorArgb } },
+      bottom: { style: 'thin' as const, color: { argb: borderColorArgb } },
+      right: { style: 'thin' as const, color: { argb: borderColorArgb } },
+    };
+
+    table.rows.forEach((row, rowIdx) => {
+      const excelRow = worksheet.getRow(rowIdx + 1);
+      const isTitleRow = rowIdx === 0 && row.some(c => (c.col_span || 1) > 2);
+      excelRow.height = isTitleRow ? 32 : 22;
+
+      let colCursor = 1;
+      row.forEach((cell) => {
+        const colSpan = Math.max(1, cell.col_span || 1);
+        const startCol = colCursor;
+        const endCol = colCursor + colSpan - 1;
+
+        const primaryCell = worksheet.getCell(rowIdx + 1, startCol);
+        primaryCell.value = cell.text ?? '';
+
+        if (colSpan > 1) {
+          worksheet.mergeCells(rowIdx + 1, startCol, rowIdx + 1, endCol);
+        }
+
+        for (let c = startCol; c <= endCol; c++) {
+          const cCell = worksheet.getCell(rowIdx + 1, c);
+
+          if (table.has_all_borders || cell.border) {
+            cCell.border = defaultBorder;
+          }
+
+          const bgArgb = toArgb(cell.bg_color);
+          if (bgArgb && bgArgb !== 'FFFFFFFF') {
+            cCell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: bgArgb },
+            };
+          }
+
+          const textArgb = toArgb(cell.text_color);
+          cCell.font = {
+            name: 'Segoe UI',
+            size: isTitleRow ? 13 : (cell.bold ? 10.5 : 10),
+            bold: Boolean(cell.bold || isTitleRow),
+            color: textArgb ? { argb: textArgb } : undefined,
+          };
+
+          cCell.alignment = {
+            horizontal: (cell.align || (isTitleRow || colSpan > 1 ? 'center' : 'left')) as any,
+            vertical: 'middle',
+            wrapText: true,
+          };
+        }
+
+        colCursor = endCol + 1;
+      });
+    });
+
+    worksheet.columns.forEach((col, idx) => {
+      let maxLength = 10;
+      table.rows.forEach(r => {
+        if (r[idx] && (r[idx].col_span || 1) === 1) {
+          maxLength = Math.max(maxLength, (r[idx].text || '').length);
+        }
+      });
+      col.width = Math.min(Math.max(maxLength + 3, 10), 35);
+    });
+
+    return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
   };
 
   const handleFileSelect = (files: FileList | File[]) => {
@@ -38,13 +286,13 @@ export default function Hero() {
     const validFiles = Array.from(files).filter(file => validTypes.includes(file.type));
     
     if (validFiles.length === 0) {
-        alert("Please upload valid image (JPG, PNG) or PDF files.");
+        showAlert("Format file tidak didukung. Harap unggah file gambar (JPG, PNG, WebP) atau PDF.", { type: "warning", title: "Format Tidak Sesuai" });
         return;
     }
     
     const newFiles = [...selectedFiles, ...validFiles];
     if (newFiles.length > 5) {
-        alert("Anda hanya dapat mengunggah maksimal 5 file sekaligus.");
+        showAlert("Anda hanya dapat mengunggah maksimal 5 file sekaligus.", { type: "warning", title: "Batas Unggahan" });
         setSelectedFiles(newFiles.slice(0, 5));
     } else {
         setSelectedFiles(newFiles);
@@ -75,11 +323,11 @@ export default function Hero() {
       }
       
       const data = await response.json();
-      setConversionResults(data.results);
+      setConversionResults(data.results || []);
       
     } catch (error: any) {
       console.error("Error uploading file:", error);
-      alert(error.message || "Terjadi kesalahan saat mengkonversi gambar.");
+      showAlert(error.message || "Terjadi kesalahan saat mengkonversi gambar.", { type: "error" });
     } finally {
       setIsUploading(false);
     }
@@ -121,20 +369,23 @@ export default function Hero() {
 
   const handleCopy = () => {
       if (conversionResults.length > 0) {
-          const combined = conversionResults.join('\n\n\n');
-          navigator.clipboard.writeText(combined);
-          alert("Data copied to clipboard!");
+          const activeTable = normalizeTableData(conversionResults[activeTableIndex] || conversionResults[0]);
+          const tsvText = activeTable.rows
+            .map(row => row.map(cell => cell.text).join('\t'))
+            .join('\r\n');
+          navigator.clipboard.writeText(tsvText);
+          showAlert("Data tabel berhasil disalin ke clipboard!", { type: "success" });
       }
   };
 
-  const downloadSingleTable = (index: number) => {
-      const result = conversionResults[index];
-      if (!result) return;
+  const downloadSingleTable = async (index: number) => {
+      const raw = conversionResults[index];
+      if (!raw) return;
       try {
-          const wb = XLSX.read(result, { type: "string", raw: true });
-          const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-          const blob = new Blob([excelBuffer], { 
-            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8" 
+          const table = normalizeTableData(raw);
+          const buffer = await generateExcelBuffer(table);
+          const blob = new Blob([buffer], { 
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
           });
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement("a");
@@ -150,17 +401,18 @@ export default function Hero() {
           }, 300);
       } catch (e) {
           console.error("Error exporting Excel:", e);
-          alert("Gagal mengunduh file Excel.");
+          showAlert("Gagal mengunduh file Excel.", { type: "error" });
       }
   };
 
   const downloadSingleCsv = (index: number) => {
-      const result = conversionResults[index];
-      if (!result) return;
+      const raw = conversionResults[index];
+      if (!raw) return;
       try {
-          // Add UTF-8 BOM so Excel opens CSV without character corruption
+          const table = normalizeTableData(raw);
+          const csv = toCsvString(table);
           const bom = "\uFEFF";
-          const blob = new Blob([bom + result], { type: 'text/csv;charset=utf-8;' });
+          const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
@@ -174,29 +426,27 @@ export default function Hero() {
             window.URL.revokeObjectURL(url);
           }, 300);
       } catch (e) {
-          console.error("Error exporting CSV:", e);
-          alert("Gagal mengunduh file CSV.");
+          console.error("Error downloading CSV:", e);
+          showAlert("Gagal mengunduh file CSV.", { type: "error" });
       }
   };
 
   const handleDownload = async () => {
       if (conversionResults.length === 0) return;
-
+      
       if (conversionResults.length === 1) {
-          // Single file download as genuine .xlsx
-          downloadSingleTable(0);
+          await downloadSingleTable(0);
       } else {
-          // Multiple files download (ZIP containing .xlsx files)
           try {
               const zip = new JSZip();
               
-              conversionResults.forEach((result, index) => {
+              for (let index = 0; index < conversionResults.length; index++) {
+                  const table = normalizeTableData(conversionResults[index]);
                   const rawName = selectedFiles[index]?.name ? selectedFiles[index].name.replace(/\.[^/.]+$/, "") : `table_${index + 1}`;
                   const cleanName = rawName.replace(/[/\\?%*:|"<>]/g, '_').trim();
-                  const wb = XLSX.read(result, { type: "string", raw: true });
-                  const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-                  zip.file(`${cleanName}.xlsx`, excelBuffer);
-              });
+                  const buffer = await generateExcelBuffer(table);
+                  zip.file(`${cleanName}.xlsx`, buffer);
+              }
               
               const content = await zip.generateAsync({ type: "blob" });
               const url = window.URL.createObjectURL(content);
@@ -211,7 +461,7 @@ export default function Hero() {
               }, 300);
           } catch (error) {
               console.error("Error creating ZIP file:", error);
-              alert("Gagal membuat file ZIP.");
+              showAlert("Gagal membuat file ZIP.", { type: "error" });
           }
       }
   };
@@ -249,7 +499,7 @@ export default function Hero() {
             transition={{ delay: 0.2 }}
             className="inline-flex items-center gap-1.5 rounded-full bg-secondary/20 px-3.5 py-1 text-xs font-semibold text-secondary-foreground dark:text-secondary transition-colors"
           >
-            <span>New AI Engine V2.2 (Native Excel .xlsx)</span>
+            <span>New AI Engine V2.3 (Borders & Color Match)</span>
             <MoveRight className="w-3 h-3" />
           </motion.div>
           
@@ -257,9 +507,16 @@ export default function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="text-3xl sm:text-4xl font-extrabold tracking-tight lg:text-5xl text-balance"
+            className="text-3xl sm:text-4xl font-extrabold tracking-tight lg:text-5xl leading-tight"
           >
-            The best place to convert <span className="text-primary italic underline decoration-secondary decoration-wavy decoration-2 underline-offset-4 break-words">Paper Tables</span> to Excel
+            <span className="block">The best place to convert</span>
+            <span className="block mt-1 sm:mt-2">
+              <span className="text-primary italic underline decoration-secondary decoration-wavy decoration-2 underline-offset-4 break-words inline-flex items-center">
+                <span>{typedText}</span>
+                <span className="inline-block w-[3px] h-[0.9em] bg-secondary ml-1 animate-pulse not-italic rounded-full align-middle" />
+              </span>{" "}
+              <span>to Excel</span>
+            </span>
           </motion.h1>
           
           <motion.p 
@@ -301,7 +558,7 @@ export default function Hero() {
                       onClick={handleUploadPhotoClick}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="w-full sm:w-auto justify-center h-12 px-8 rounded-full bg-primary text-primary-foreground font-bold shadow-lg shadow-primary/25 transition-all flex items-center gap-2 hover:shadow-primary/40"
+                      className="w-full sm:w-auto justify-center h-12 px-8 rounded-full bg-primary text-primary-foreground font-bold shadow-lg shadow-primary/25 transition-all flex items-center gap-2 hover:shadow-primary/40 cursor-pointer"
                    >
                       <Upload className="w-5 h-5" />
                       Upload Photo
@@ -310,7 +567,7 @@ export default function Hero() {
                       onClick={handleUseCameraClick}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="w-full sm:w-auto justify-center h-12 px-8 rounded-full bg-white dark:bg-secondary text-secondary-foreground border-2 border-secondary font-bold transition-all flex items-center gap-2 hover:bg-secondary/10"
+                      className="w-full sm:w-auto justify-center h-12 px-8 rounded-full bg-white dark:bg-secondary text-secondary-foreground border-2 border-secondary font-bold transition-all flex items-center gap-2 hover:bg-secondary/10 cursor-pointer"
                    >
                       <Camera className="w-5 h-5" />
                       Use Camera
@@ -340,7 +597,7 @@ export default function Hero() {
                       Drag & drop your file here
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Supports JPG, PNG, PDF
+                      Supports JPG, PNG, PDF (Maks. 5 file)
                     </p>
                   </div>
                 </div>
@@ -357,7 +614,7 @@ export default function Hero() {
             >
                <div className="flex items-center justify-between mb-2">
                    <h3 className="font-bold text-lg text-foreground">Ready to Convert</h3>
-                   <button onClick={handleStartOver} disabled={isUploading} className="text-muted-foreground hover:text-destructive transition-colors">
+                   <button onClick={handleStartOver} disabled={isUploading} className="text-muted-foreground hover:text-destructive transition-colors cursor-pointer">
                        <X className="w-5 h-5" />
                    </button>
                </div>
@@ -376,6 +633,20 @@ export default function Hero() {
                                <p className="font-semibold text-xs text-foreground truncate">{file.name}</p>
                                <p className="text-[10px] text-muted-foreground mt-0.5">{(file.size / 1024).toFixed(0)} KB</p>
                            </div>
+                           <button
+                               type="button"
+                               onClick={(e) => {
+                                   e.stopPropagation();
+                                   const updated = selectedFiles.filter((_, i) => i !== idx);
+                                   setSelectedFiles(updated);
+                                   if (updated.length === 0) handleStartOver();
+                               }}
+                               disabled={isUploading}
+                               className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded-md hover:bg-muted shrink-0 cursor-pointer"
+                               title="Hapus file"
+                           >
+                               <X className="w-3.5 h-3.5" />
+                           </button>
                        </div>
                    ))}
                </div>
@@ -386,7 +657,7 @@ export default function Hero() {
                       disabled={isUploading}
                       whileHover={{ scale: isUploading ? 1 : 1.05 }}
                       whileTap={{ scale: isUploading ? 1 : 0.95 }}
-                      className={`h-12 px-10 rounded-full bg-primary text-primary-foreground font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 w-full sm:w-auto ${isUploading ? 'opacity-90 cursor-wait' : 'hover:shadow-primary/40'}`}
+                      className={`h-12 px-10 rounded-full bg-primary text-primary-foreground font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 w-full sm:w-auto cursor-pointer ${isUploading ? 'opacity-90 cursor-wait' : 'hover:shadow-primary/40'}`}
                    >
                       {isUploading ? (
                           <>
@@ -426,21 +697,21 @@ export default function Hero() {
                     <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 w-full">
                         <button 
                           onClick={() => setPreviewVisible(!previewVisible)}
-                          className={`w-full sm:w-auto justify-center h-10 px-4 rounded-full font-medium text-sm transition-all flex items-center gap-2 ${previewVisible ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+                          className={`w-full sm:w-auto justify-center h-10 px-4 rounded-full font-medium text-sm transition-all flex items-center gap-2 cursor-pointer ${previewVisible ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
                         >
                            <Eye className="w-4 h-4 shrink-0" />
                            <span>Preview</span>
                         </button>
                         <button 
                           onClick={handleCopy}
-                          className="w-full sm:w-auto justify-center h-10 px-4 rounded-full bg-secondary text-secondary-foreground font-medium text-sm hover:bg-secondary/80 transition-all flex items-center gap-2"
+                          className="w-full sm:w-auto justify-center h-10 px-4 rounded-full bg-secondary text-secondary-foreground font-medium text-sm hover:bg-secondary/80 transition-all flex items-center gap-2 cursor-pointer"
                         >
                            <Copy className="w-4 h-4 shrink-0" />
                            <span>Copy</span>
                         </button>
                         <button 
                           onClick={handleDownload}
-                          className="w-full sm:w-auto justify-center h-10 px-5 rounded-full bg-green-600 text-white font-bold text-sm hover:bg-green-700 shadow-lg shadow-green-600/20 transition-all flex items-center gap-2"
+                          className="w-full sm:w-auto justify-center h-10 px-5 rounded-full bg-green-600 text-white font-bold text-sm hover:bg-green-700 shadow-lg shadow-green-600/20 transition-all flex items-center gap-2 cursor-pointer"
                         >
                            <Download className="w-4 h-4" />
                            <span>{selectedFiles.length === 1 ? "Download Excel (.xlsx)" : "Download Semua (.zip)"}</span>
@@ -448,7 +719,7 @@ export default function Hero() {
                         {selectedFiles.length === 1 && (
                             <button 
                               onClick={() => downloadSingleCsv(0)}
-                              className="w-full sm:w-auto justify-center h-10 px-4 rounded-full border border-border bg-background hover:bg-muted text-muted-foreground font-medium text-xs transition-all flex items-center gap-1.5"
+                              className="w-full sm:w-auto justify-center h-10 px-4 rounded-full border border-border bg-background hover:bg-muted text-muted-foreground font-medium text-xs transition-all flex items-center gap-1.5 cursor-pointer"
                               title="Download sebagai CSV"
                             >
                                <span>Unduh CSV</span>
@@ -459,7 +730,7 @@ export default function Hero() {
 
                 <button 
                   onClick={handleStartOver}
-                  className="mx-auto w-full sm:w-auto justify-center h-10 px-6 mb-6 rounded-full border border-border bg-white dark:bg-card text-foreground font-medium text-sm hover:bg-muted transition-all flex items-center gap-2"
+                  className="mx-auto w-full sm:w-auto justify-center h-10 px-6 mb-6 rounded-full border border-border bg-white dark:bg-card text-foreground font-medium text-sm hover:bg-muted transition-all flex items-center gap-2 cursor-pointer"
                 >
                    <RotateCcw className="w-4 h-4" />
                    Start over
@@ -467,10 +738,9 @@ export default function Hero() {
 
                 {/* Preview Grid */}
                 {previewVisible && (() => {
-                    const activeResult = conversionResults[activeTableIndex] || conversionResults[0] || '';
-                    const parsedRows = parseCsvRows(activeResult);
-                    const headers = parsedRows[0] || [];
-                    const bodyRows = parsedRows.slice(1);
+                    const activeRaw = conversionResults[activeTableIndex] || conversionResults[0];
+                    const activeTable = normalizeTableData(activeRaw);
+                    const hasBorders = activeTable.has_all_borders;
 
                     return (
                       <motion.div 
@@ -483,27 +753,37 @@ export default function Hero() {
                               <div className="flex items-center gap-2">
                                   <h3 className="font-bold text-sm text-foreground">Data Preview</h3>
                                   <span className="text-xs text-muted-foreground bg-background/80 px-2 py-0.5 rounded-full border border-border/50">
-                                      {bodyRows.length} baris
+                                      {activeTable.rows.length} baris
                                   </span>
+                                  {activeTable.title && (
+                                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-pink-500/10 text-pink-700 dark:text-pink-300 border border-pink-500/20 px-2.5 py-0.5 rounded-full">
+                                      {activeTable.title}
+                                    </span>
+                                  )}
+                                  {activeTable.border_color && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 px-2.5 py-0.5 rounded-full">
+                                      Border: {activeTable.border_color}
+                                    </span>
+                                  )}
                               </div>
                               <div className="flex flex-wrap items-center gap-2">
                                   <button 
                                     onClick={() => downloadSingleTable(activeTableIndex)} 
-                                    className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+                                    className="text-xs bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
                                   >
                                       <Download className="w-3.5 h-3.5" />
                                       <span>Download Excel (.xlsx)</span>
                                   </button>
                                   <button 
                                     onClick={() => downloadSingleCsv(activeTableIndex)} 
-                                    className="text-xs bg-background hover:bg-muted text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 border border-border/60"
+                                    className="text-xs bg-background hover:bg-muted text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 border border-border/60 cursor-pointer"
                                     title="Download format CSV"
                                   >
                                       <span>CSV</span>
                                   </button>
                                   <button 
                                     onClick={handleCopy} 
-                                    className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1"
+                                    className="text-xs bg-secondary hover:bg-secondary/80 text-secondary-foreground px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 cursor-pointer"
                                   >
                                       <Copy className="w-3.5 h-3.5" />
                                       <span>Copy</span>
@@ -511,91 +791,89 @@ export default function Hero() {
                               </div>
                           </div>
 
-                          {/* Multi-table Tabs (if multiple files uploaded) */}
+                          {/* Multiple Table Tab Switcher */}
                           {conversionResults.length > 1 && (
                               <div className="flex items-center gap-2 overflow-x-auto p-2.5 bg-muted/30 border-b border-border/50 custom-scrollbar">
-                                  {conversionResults.map((_, idx) => (
+                                  <span className="text-xs font-semibold text-muted-foreground shrink-0 pl-1">Tabel:</span>
+                                  {conversionResults.map((_, tIdx) => (
                                       <button
-                                          key={idx}
-                                          onClick={() => setActiveTableIndex(idx)}
-                                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                                              activeTableIndex === idx
-                                                  ? 'bg-primary text-primary-foreground shadow-sm'
-                                                  : 'bg-background hover:bg-muted text-muted-foreground border border-border/60'
-                                          }`}
+                                        key={tIdx}
+                                        onClick={() => setActiveTableIndex(tIdx)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0 cursor-pointer ${
+                                          activeTableIndex === tIdx
+                                            ? 'bg-primary text-primary-foreground shadow-sm'
+                                            : 'bg-background hover:bg-muted text-muted-foreground border border-border/60'
+                                        }`}
                                       >
-                                          <FileSpreadsheet className="w-3.5 h-3.5" />
-                                          <span className="truncate max-w-[130px] sm:max-w-[200px]">
-                                              {selectedFiles[idx]?.name || `Tabel ${idx + 1}`}
-                                          </span>
+                                          {selectedFiles[tIdx]?.name ? (selectedFiles[tIdx].name.length > 20 ? selectedFiles[tIdx].name.substring(0, 18) + '...' : selectedFiles[tIdx].name) : `Tabel ${tIdx + 1}`}
                                       </button>
                                   ))}
                               </div>
                           )}
 
-                          {/* Current File Header & Mobile Scroll Hint */}
+                          {/* Table Info Bar */}
                           <div className="px-4 py-2 bg-muted/10 border-b border-border/40 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
-                              <div className="flex items-center gap-1.5 text-primary font-medium truncate">
-                                  <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
-                                  <span className="truncate">{selectedFiles[activeTableIndex]?.name || `Tabel ${activeTableIndex + 1}`}</span>
-                              </div>
-                              <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                  <span className="hidden sm:inline">Tabel responsif: geser horizontal untuk melihat semua kolom</span>
-                                  <span className="sm:hidden">👈 Geser tabel ke kanan/kiri 👉</span>
-                                  <span className="font-semibold text-primary ml-1">({headers.length} Kolom)</span>
-                              </div>
+                              <span className="text-muted-foreground">
+                                  Menampilkan: <strong className="text-foreground">{selectedFiles[activeTableIndex]?.name || `Tabel ${activeTableIndex + 1}`}</strong>
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                  Warna sel & border disinkronkan otomatis sesuai gambar
+                              </span>
                           </div>
 
-                          {/* Fully Responsive Scrollable Table */}
-                          <div className="p-0 overflow-x-auto custom-scrollbar w-full max-w-full block overscroll-x-contain">
-                              <table className="w-full text-xs sm:text-sm text-left border-collapse min-w-max">
-                                   <thead className="text-[11px] sm:text-xs text-muted-foreground bg-muted/80 backdrop-blur-md sticky top-0 z-10 shadow-sm border-b border-border/60">
-                                       <tr>
-                                           {headers.map((header, idx) => (
-                                               <th 
-                                                 key={idx} 
-                                                 className={`px-4 py-3 font-bold border-r border-border/40 last:border-r-0 ${
-                                                    idx === 0 
-                                                      ? 'text-center w-12 min-w-[50px]' 
-                                                      : idx === 1 
-                                                        ? 'min-w-[180px]' 
-                                                        : 'text-center min-w-[80px]'
-                                                 }`}
-                                               >
-                                                   {header || `Kol ${idx + 1}`}
-                                               </th>
-                                           ))}
-                                       </tr>
-                                   </thead>
-                                   <tbody className="divide-y divide-border/40 text-foreground">
-                                       {bodyRows.map((row, rowIndex) => (
-                                           <tr key={rowIndex} className="hover:bg-primary/5 transition-colors even:bg-muted/15">
-                                               {headers.map((_, cellIndex) => {
-                                                   const cell = row[cellIndex] ?? '';
-                                                   const isCheck = cell === '✓' || cell.toLowerCase() === 'v' || cell === 'âœ“';
-                                                   return (
-                                                       <td 
-                                                         key={cellIndex} 
-                                                         className={`px-4 py-2.5 border-r border-border/40 last:border-r-0 ${
-                                                            cellIndex === 0 
-                                                              ? 'text-center font-mono text-muted-foreground font-semibold bg-muted/10' 
-                                                              : cellIndex === 1 
-                                                                ? 'font-medium max-w-[240px] truncate' 
-                                                                : 'text-center'
-                                                         }`}
-                                                       >
-                                                           {isCheck ? (
-                                                               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-500/15 text-green-600 dark:text-green-400 font-bold text-xs">
-                                                                   ✓
-                                                               </span>
-                                                           ) : (
-                                                               cell !== '' ? cell : <span className="text-muted-foreground/30">-</span>
-                                                           )}
-                                                       </td>
-                                                   );
-                                               })}
-                                           </tr>
-                                       ))}
+                          {/* Table Container */}
+                          <div className="p-3 sm:p-4 overflow-x-auto custom-scrollbar w-full max-w-full block overscroll-x-contain">
+                              <table 
+                                className={`w-full text-xs sm:text-sm text-left min-w-max border-collapse ${hasBorders ? 'border' : ''}`}
+                                style={{ borderColor: activeTable.border_color || '#C48B80' }}
+                              >
+                                   <tbody className="text-foreground">
+                                       {activeTable.rows.map((row, rowIndex) => {
+                                           const isTitleRow = rowIndex === 0 && row.some(c => (c.col_span || 1) > 2);
+                                           return (
+                                               <tr key={rowIndex} className="hover:bg-primary/5 transition-colors">
+                                                   {row.map((cell, cellIndex) => {
+                                                       const text = cell?.text ?? '';
+                                                       const isCheck = text === '✓' || text.toLowerCase() === 'v' || text === 'âœ“';
+                                                       const customBg = cell?.bg_color;
+                                                       const customText = cell?.text_color;
+                                                       const isBold = Boolean(cell?.bold || isTitleRow);
+                                                       const align = cell?.align || (isTitleRow || (cell.col_span && cell.col_span > 1) ? 'center' : 'left');
+                                                       const colSpan = Math.max(1, cell?.col_span || 1);
+                                                       const cellHasBorder = hasBorders || cell?.border;
+
+                                                       return (
+                                                           <td 
+                                                             key={cellIndex} 
+                                                             colSpan={colSpan}
+                                                             style={{
+                                                               backgroundColor: customBg || undefined,
+                                                               color: customText || undefined,
+                                                               borderColor: cellHasBorder ? (activeTable.border_color || '#C48B80') : undefined,
+                                                             }}
+                                                             className={`px-3.5 py-2 transition-colors ${
+                                                               cellHasBorder ? 'border' : ''
+                                                             } ${
+                                                               isBold ? 'font-bold' : ''
+                                                             } ${
+                                                               isTitleRow ? 'text-base sm:text-lg text-center py-3.5 tracking-wide' : ''
+                                                             } ${
+                                                               align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left'
+                                                             }`}
+                                                           >
+                                                               {isCheck ? (
+                                                                   <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-500/15 text-green-600 dark:text-green-400 font-bold text-xs">
+                                                                       ✓
+                                                                   </span>
+                                                               ) : (
+                                                                   text !== '' ? text : <span className="opacity-0">-</span>
+                                                               )}
+                                                           </td>
+                                                       );
+                                                   })}
+                                               </tr>
+                                           );
+                                       })}
                                    </tbody>
                               </table>
                           </div>
@@ -648,6 +926,85 @@ export default function Hero() {
              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20M2 12h20"/></svg>
          </motion.div>
       </div>
+
+      {/* Centered Web-Themed Modal Alert Notification */}
+      {isMounted && typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {modalNotification?.isOpen && (
+            <div 
+              className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              onClick={() => setModalNotification(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.88, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.88, y: 15 }}
+                transition={{ type: "spring", duration: 0.35, bounce: 0.15 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm rounded-3xl bg-card border border-border/80 shadow-2xl p-6 text-center relative overflow-hidden"
+              >
+                {/* Glow ambient background effect */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -mt-10 w-40 h-40 bg-primary/20 rounded-full blur-2xl -z-0 pointer-events-none" />
+
+                {/* Close button X */}
+                <button
+                  type="button"
+                  onClick={() => setModalNotification(null)}
+                  className="absolute top-4 right-4 p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+                  title="Tutup"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
+                {/* Icon Circle */}
+                <div className="mx-auto w-14 h-14 rounded-2xl flex items-center justify-center mb-4 relative z-10">
+                  {modalNotification.type === 'warning' ? (
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-sm">
+                      <AlertTriangle className="w-7 h-7" />
+                    </div>
+                  ) : modalNotification.type === 'error' ? (
+                    <div className="w-14 h-14 rounded-2xl bg-destructive/15 border border-destructive/30 flex items-center justify-center text-destructive shadow-sm">
+                      <AlertCircle className="w-7 h-7" />
+                    </div>
+                  ) : modalNotification.type === 'success' ? (
+                    <div className="w-14 h-14 rounded-2xl bg-green-500/15 border border-green-500/30 flex items-center justify-center text-green-500 shadow-sm">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shadow-sm">
+                      <Info className="w-7 h-7" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Title */}
+                <h3 className="font-bold text-lg text-foreground mb-2 relative z-10">
+                  {modalNotification.title}
+                </h3>
+
+                {/* Message */}
+                <p className="text-sm text-muted-foreground leading-relaxed mb-6 relative z-10">
+                  {modalNotification.message}
+                </p>
+
+                {/* OK Action Button */}
+                <div className="relative z-10 flex justify-center">
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setModalNotification(null)}
+                    className="w-full sm:w-auto min-w-[130px] h-11 px-8 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-sm shadow-lg shadow-primary/25 transition-all flex items-center justify-center cursor-pointer"
+                  >
+                    Mengerti
+                  </motion.button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </FadeIn>
   );
 }

@@ -25,9 +25,9 @@ export default function Fitur() {
             <FadeIn delay={0.3} direction="up" className="h-full">
                 <ValueCard 
                 icon={<Brain className="w-7 h-7" />} 
-                title="Smart AI" 
+                title="Smart AI & Visual Fidelity" 
                 variant="dark"
-                description="Our technology understands complex tables, merged headers, and handwriting."
+                description="Detects table grid borders, cell colors, merged headers, and handwriting to match your original document."
                 />
             </FadeIn>
         </div>

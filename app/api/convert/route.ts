@@ -23,11 +23,41 @@ export async function POST(req: NextRequest) {
     // 2. Hubungi Gemini AI menggunakan API Key
     const ai = new GoogleGenAI({ apiKey });
     
-    // 3. Berikan instruksi (prompt) ke Gemini
-    const prompt = "You are a table extraction AI. Extract the tabular data from the image into clean CSV format. Output ONLY the CSV rows (header and data). Do NOT include any intro text, title, preamble, markdown formatting, backticks, or comments.";
+    // 3. Berikan instruksi (prompt) ke Gemini untuk mendeteksi data, border, warna, judul, dan metadata
+    const prompt = `You are an expert document and table digitization AI.
+Digitize the entire page from the image into a clean spreadsheet structure with high visual fidelity.
 
-    // Fallback models if primary model is experiencing high demand (503)
-    const candidateModels = ['gemini-2.5-flash', 'gemini-3.5-flash-lite'];
+CRITICAL INSTRUCTIONS:
+1. CAPTURE EVERYTHING ON THE PAGE (Title, Metadata, Tables, Footers):
+   - Document Title: If there is a title or heading at the top (e.g. 'Daftar Belanja Bulanan'), include it as the first row. It should span across all columns ("col_span": total columns, e.g. 6).
+   - Metadata / Info Header Boxes: If there is an info block or meta box above/around the tables (e.g. 'Bulan: Maret', 'Tempat Belanja: Grosir + minimarket', 'Anggaran: 850.000', 'Sebenarnya:', 'Selisih:'), recreate each row faithfully with all its labels and values, respecting column spans.
+   - Side-by-side tables: If tables are displayed side-by-side (e.g. 2 sets of 'Nama Barang', 'Uk.', 'Harga'), capture all columns in the same rows (e.g. 6 columns wide: col 1-3 is left table, col 4-6 is right table).
+   - Blank / Empty rows: Include blank rows or empty cells where they appear in the original grid layout (e.g. empty right-hand table rows or separator rows).
+
+2. BORDERS & BORDER COLOR:
+   - Identify if the tables and boxes have visible borders. Set "has_all_borders": true.
+   - Detect the exact border line color (e.g. peach/rose/coral/brown hex code like '#D3A79E', '#C48B80', '#E2B0A6', or '#CBD5E1') as "border_color".
+   - Each cell in a bordered box/table should have "border": true.
+
+3. COLORS & FORMATTING:
+   - Detect background color ("bg_color") for every cell (e.g. peach/pinkish fills for headers and info boxes, white or null for blank rows).
+   - Detect appropriate text color ("text_color") and font weight ("bold": true/false).
+   - Alignment ("align"): "center" for numbers, dates, units, codes, or headers; "left" for item names/descriptions; "right" for prices/currency.
+
+Return ONLY raw JSON with this exact schema. Do NOT wrap in markdown code fences (\`\`\`json), do NOT include any introductory or concluding text:
+{
+  "title": "Daftar Belanja Bulanan",
+  "has_all_borders": true,
+  "border_color": "#C48B80",
+  "rows": [
+    [
+      { "text": "...", "bg_color": "#HEX or null", "text_color": "#HEX or null", "bold": true/false, "align": "left/center/right", "border": true/false, "col_span": 1 }
+    ]
+  ]
+}`;
+
+    // Priority models with fallback
+    const candidateModels = ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
 
     const generateContentWithRetry = async (contents: any) => {
       let lastError: any = null;
@@ -80,16 +110,77 @@ export async function POST(req: NextRequest) {
 
         let text = response.text || "";
         // Clean markdown code fences if present
-        text = text.replace(/^```(?:csv)?\s*/gi, '').replace(/\s*```$/gi, '').trim();
+        text = text.replace(/^```(?:json|csv)?\s*/gi, '').replace(/\s*```$/gi, '').trim();
 
-        // If preamble exists before table headers, strip preamble lines
-        const lines = text.split('\n');
-        const firstCsvLineIndex = lines.findIndex(line => line.includes(',') || line.includes(';') || line.includes('\t'));
-        if (firstCsvLineIndex > 0) {
-          text = lines.slice(firstCsvLineIndex).join('\n');
+        let tableData: any = null;
+
+        // Try parsing JSON from Gemini
+        try {
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed && Array.isArray(parsed.rows)) {
+              const sanitizedRows = parsed.rows.map((row: any[]) => {
+                if (!Array.isArray(row)) return [];
+                return row.map((cell: any) => {
+                  if (typeof cell === 'string') {
+                    return {
+                      text: cell,
+                      bg_color: null,
+                      text_color: null,
+                      bold: false,
+                      align: 'left',
+                      col_span: 1
+                    };
+                  }
+                  return {
+                    text: String(cell?.text ?? ''),
+                    bg_color: typeof cell?.bg_color === 'string' && cell.bg_color.startsWith('#') ? cell.bg_color : null,
+                    text_color: typeof cell?.text_color === 'string' && cell.text_color.startsWith('#') ? cell.text_color : null,
+                    bold: Boolean(cell?.bold),
+                    align: ['left', 'center', 'right'].includes(cell?.align) ? cell.align : 'left',
+                    border: cell?.border !== undefined ? Boolean(cell.border) : undefined,
+                    col_span: typeof cell?.col_span === 'number' && cell.col_span > 1 ? cell.col_span : 1
+                  };
+                });
+              });
+
+              tableData = {
+                title: typeof parsed.title === 'string' ? parsed.title : undefined,
+                has_all_borders: Boolean(parsed.has_all_borders ?? true),
+                border_color: typeof parsed.border_color === 'string' && parsed.border_color.startsWith('#') ? parsed.border_color : '#C48B80',
+                rows: sanitizedRows
+              };
+            }
+          }
+        } catch (e) {
+          console.warn("JSON parsing failed, falling back to line split:", e);
         }
 
-        return text;
+        // Fallback to CSV parsing if Gemini returned text or CSV
+        if (!tableData) {
+          const lines = text.split('\n').filter(l => l.trim().length > 0);
+          const firstCsvLineIndex = lines.findIndex(line => line.includes(',') || line.includes(';') || line.includes('\t'));
+          const relevantLines = firstCsvLineIndex >= 0 ? lines.slice(firstCsvLineIndex) : lines;
+          
+          const rows = relevantLines.map((line, rowIdx) => {
+            const separator = line.includes('\t') ? '\t' : (line.includes(';') ? ';' : ',');
+            return line.split(separator).map((col, colIdx) => ({
+              text: col.replace(/^["']|["']$/g, '').trim(),
+              bg_color: null,
+              text_color: null,
+              bold: rowIdx === 0,
+              align: colIdx === 0 ? 'center' : 'left'
+            }));
+          });
+
+          tableData = {
+            has_all_borders: true,
+            rows: rows
+          };
+        }
+
+        return tableData;
     });
 
     const results = await Promise.all(conversionPromises);

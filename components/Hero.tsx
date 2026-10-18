@@ -3,10 +3,40 @@
 
 import { Upload, Camera, MoveRight, FileUp } from "lucide-react";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function Hero() {
   const [isDragging, setIsDragging] = useState(false);
+  const typingWords = ["Paper Tables", "jpeg", "jpg", "png", "webp", "pdf"];
+  const [wordIndex, setWordIndex] = useState(0);
+  const [typedText, setTypedText] = useState("Paper Tables");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const currentWord = typingWords[wordIndex];
+    let timer: NodeJS.Timeout;
+    if (!isDeleting) {
+      if (typedText.length < currentWord.length) {
+        timer = setTimeout(() => {
+          setTypedText(currentWord.substring(0, typedText.length + 1));
+        }, 110);
+      } else {
+        timer = setTimeout(() => {
+          setIsDeleting(true);
+        }, 2200);
+      }
+    } else {
+      if (typedText.length > 0) {
+        timer = setTimeout(() => {
+          setTypedText(currentWord.substring(0, typedText.length - 1));
+        }, 55);
+      } else {
+        setIsDeleting(false);
+        setWordIndex((prev) => (prev + 1) % typingWords.length);
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [typedText, isDeleting, wordIndex]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -59,7 +89,7 @@ export function Hero() {
           transition={{ delay: 0.3 }}
           className="text-4xl font-extrabold tracking-tight lg:text-5xl text-balance"
         >
-          The best place to convert <span className="text-primary italic underline decoration-secondary decoration-wavy decoration-2 underline-offset-4">Paper Tables</span> to Excel
+          The best place to convert{" "}<span className="text-primary italic underline decoration-secondary decoration-wavy decoration-2 underline-offset-4 break-words inline-flex items-center"><span>{typedText}</span><span className="inline-block w-[3px] h-[0.9em] bg-secondary ml-1 animate-pulse not-italic rounded-full align-middle" /></span>{" "}to Excel
         </motion.h1>
         
         <motion.p 

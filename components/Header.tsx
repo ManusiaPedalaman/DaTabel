@@ -1,9 +1,8 @@
-
 "use client";
 
 import * as React from "react";
-import { Moon, Sun, Menu, X } from "lucide-react";
 import { useTheme } from "next-themes";
+import { motion, AnimatePresence } from "framer-motion";
 
 export function Header() {
   const { setTheme, theme } = useTheme();
@@ -66,25 +65,51 @@ export function Header() {
                     Support me
                 </button>
 
-                {/* Mobile Menu Toggle */}
+                {/* Animated 3-Line Hamburger Button */}
                 <button 
-                  className="md:hidden p-1 text-foreground"
+                  className="md:hidden relative w-9 h-9 flex flex-col justify-center items-center rounded-xl hover:bg-muted/60 transition-colors p-1.5 text-foreground focus:outline-none cursor-pointer"
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  aria-label={isMenuOpen ? "Tutup menu" : "Buka menu"}
                 >
-                  {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                  {/* Line 1 (Top) */}
+                  <motion.span
+                    animate={isMenuOpen ? { rotate: 45, y: 6 } : { rotate: 0, y: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="w-5 h-0.5 bg-foreground rounded-full block origin-center"
+                  />
+                  {/* Line 2 (Middle) */}
+                  <motion.span
+                    animate={isMenuOpen ? { opacity: 0, scaleX: 0 } : { opacity: 1, scaleX: 1 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                    className="w-5 h-0.5 bg-foreground rounded-full block my-1 origin-center"
+                  />
+                  {/* Line 3 (Bottom) */}
+                  <motion.span
+                    animate={isMenuOpen ? { rotate: -45, y: -6 } : { rotate: 0, y: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="w-5 h-0.5 bg-foreground rounded-full block origin-center"
+                  />
                 </button>
             </div>
         </div>
 
-        {/* Mobile Menu Dropdown */}
-        {isMenuOpen && (
-          <div className="md:hidden absolute top-full left-0 w-full mt-2 p-4 bg-background/95 backdrop-blur-xl border border-border/40 rounded-2xl shadow-xl flex flex-col gap-4 text-center animate-in slide-in-from-top-2 fade-in duration-200">
-              <a href="#home" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Home</a>
-              <a href="#works" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>How it works</a>
-              <a href="#features" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Features</a>
-              <a href="#why" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Why?</a>
-          </div>
-        )}
+        {/* Mobile Menu Dropdown with Smooth Animation */}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <motion.div 
+              initial={{ opacity: 0, y: -8, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.96 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="md:hidden absolute top-full left-0 w-full mt-2 p-4 bg-background/95 backdrop-blur-xl border border-border/40 rounded-2xl shadow-xl flex flex-col gap-4 text-center overflow-hidden"
+            >
+                <a href="#home" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Home</a>
+                <a href="#works" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>How it works</a>
+                <a href="#features" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Features</a>
+                <a href="#why" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Why?</a>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
     </div>
   );
