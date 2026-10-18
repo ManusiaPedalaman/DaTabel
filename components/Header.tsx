@@ -61,9 +61,14 @@ export function Header() {
                 </div>
 
                 {/* Follow Me Button */}
-                <button className="hidden min-[420px]:inline-flex h-8 items-center justify-center rounded-full bg-primary px-3 sm:px-4 text-xs font-medium text-primary-foreground shadow hover:bg-primary/90">
+                <a 
+                  href="https://saweria.co/ANDM" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="hidden min-[420px]:inline-flex h-8 items-center justify-center rounded-full bg-primary px-3 sm:px-4 text-xs font-medium text-primary-foreground shadow hover:bg-primary/90 transition-transform hover:scale-105"
+                >
                     Support me
-                </button>
+                </a>
 
                 {/* Animated 3-Line Hamburger Button */}
                 <button 
@@ -110,12 +115,15 @@ export function Header() {
                 
                 {/* Mobile Support Me Button */}
                 <div className="pt-2 border-t border-border/40 flex justify-center">
-                    <button 
+                    <a 
+                      href="https://saweria.co/ANDM"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="w-full h-10 px-6 rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow-md hover:bg-primary/90 transition-all flex items-center justify-center cursor-pointer"
                       onClick={() => setIsMenuOpen(false)}
                     >
                         Support me
-                    </button>
+                    </a>
                 </div>
             </motion.div>
           )}
