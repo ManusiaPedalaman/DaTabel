@@ -5,11 +5,8 @@
 
 ---
 
-<<<<<<< HEAD
-<img width="1919" height="913" alt="Screenshot DaTabel Web" src="https://via.placeholder.com/1919x913.png?text=DaTabel+-+The+Best+Place+To+Convert+Paper+Tables+To+Excel" />
-=======
+
 <img width="1920" height="1080" alt="Screenshot 2026-04-21 121138" src="https://github.com/user-attachments/assets/e2b669de-1127-467b-9fc2-7e101a9b2e84" />
->>>>>>> db814bef0ed56b2280bbef0dc69cb44e628fb2df
 
 ---
 

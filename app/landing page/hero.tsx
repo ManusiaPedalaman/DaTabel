@@ -21,6 +21,7 @@ import { FadeIn } from "@/components/FadeIn";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import JSZip from "jszip";
+import { optimizeFileBatch } from "@/lib/imageOptimizer";
 
 export interface CellData {
   text: string;
@@ -49,6 +50,7 @@ export interface ModalNotification {
 export default function Hero() {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [conversionResults, setConversionResults] = useState<any[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -279,18 +281,44 @@ export default function Hero() {
     return (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
   };
 
-  const handleFileSelect = (files: FileList | File[]) => {
+  const handleFileSelect = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
     const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf', 'image/webp'];
     
-    const validFiles = Array.from(files).filter(file => validTypes.includes(file.type));
+    // Also support mobile camera photos where mime-type might be generic or uppercase
+    const fileArray = Array.from(files);
+    const validFiles = fileArray.filter(file => {
+      const type = (file.type || '').toLowerCase();
+      if (validTypes.includes(type)) return true;
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      return ['jpg', 'jpeg', 'png', 'webp', 'pdf'].includes(ext || '');
+    });
     
     if (validFiles.length === 0) {
         showAlert("Format file tidak didukung. Harap unggah file gambar (JPG, PNG, WebP) atau PDF.", { type: "warning", title: "Format Tidak Sesuai" });
         return;
     }
+
+    // Check PDF size limit (4MB)
+    for (const f of validFiles) {
+      if (f.type === 'application/pdf' && f.size > 4.2 * 1024 * 1024) {
+        showAlert("Ukuran file PDF tidak boleh lebih dari 4 MB.", { type: "warning", title: "Ukuran PDF Terlalu Besar" });
+        return;
+      }
+    }
+
+    setIsOptimizing(true);
+    let optimizedFiles: File[] = [];
+    try {
+      optimizedFiles = await optimizeFileBatch(validFiles);
+    } catch (e) {
+      console.warn("Failed optimizing files:", e);
+      optimizedFiles = validFiles;
+    } finally {
+      setIsOptimizing(false);
+    }
     
-    const newFiles = [...selectedFiles, ...validFiles];
+    const newFiles = [...selectedFiles, ...optimizedFiles];
     if (newFiles.length > 5) {
         showAlert("Anda hanya dapat mengunggah maksimal 5 file sekaligus.", { type: "warning", title: "Batas Unggahan" });
         setSelectedFiles(newFiles.slice(0, 5));
@@ -307,8 +335,11 @@ export default function Hero() {
     setIsUploading(true);
     
     try {
+      // Final pass optimization to strictly guarantee total body payload < 4.5MB
+      const readyFiles = await optimizeFileBatch(selectedFiles);
+
       const formData = new FormData();
-      selectedFiles.forEach((file) => {
+      readyFiles.forEach((file) => {
           formData.append("files", file);
       });
 
@@ -316,13 +347,36 @@ export default function Hero() {
         method: "POST",
         body: formData,
       });
-      
-      if (!response.ok) {
-         const err = await response.json();
-         throw new Error(err.error || "Gagal mengunggah file");
+
+      const responseText = await response.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        // Not JSON formatted (e.g. Vercel 413, 504, 502)
       }
       
-      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 413) {
+          throw new Error("Ukuran foto/file melebihi batas upload server. Silakan coba ambil foto dari jarak lebih dekat atau pilih foto yang lebih ringkas.");
+        }
+        if (data && data.error) {
+          throw new Error(data.error);
+        }
+        if (response.status === 504) {
+          throw new Error("Waktu pemrosesan habis (Timeout). Silakan coba lagi beberapa saat.");
+        }
+        throw new Error(
+          responseText.length > 0 && responseText.length < 120
+            ? responseText
+            : `Terjadi kendala pada server (Status ${response.status}). Silakan coba beberapa saat lagi.`
+        );
+      }
+      
+      if (!data || !data.results) {
+        throw new Error("Gagal menerima hasil konversi dari AI. Silakan coba lagi.");
+      }
+
       setConversionResults(data.results || []);
       
     } catch (error: any) {
@@ -356,6 +410,8 @@ export default function Hero() {
     if (e.target.files && e.target.files.length > 0) {
       handleFileSelect(e.target.files);
     }
+    // Clear input value so same camera capture or file can be selected again
+    e.target.value = "";
   };
 
   const handleStartOver = () => {
@@ -654,15 +710,20 @@ export default function Hero() {
                <div className="flex justify-center">
                    <motion.button 
                       onClick={startConversionProcess}
-                      disabled={isUploading}
-                      whileHover={{ scale: isUploading ? 1 : 1.05 }}
-                      whileTap={{ scale: isUploading ? 1 : 0.95 }}
-                      className={`h-12 px-10 rounded-full bg-primary text-primary-foreground font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 w-full sm:w-auto cursor-pointer ${isUploading ? 'opacity-90 cursor-wait' : 'hover:shadow-primary/40'}`}
+                      disabled={isUploading || isOptimizing}
+                      whileHover={{ scale: (isUploading || isOptimizing) ? 1 : 1.05 }}
+                      whileTap={{ scale: (isUploading || isOptimizing) ? 1 : 0.95 }}
+                      className={`h-12 px-10 rounded-full bg-primary text-primary-foreground font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 w-full sm:w-auto cursor-pointer ${(isUploading || isOptimizing) ? 'opacity-90 cursor-wait' : 'hover:shadow-primary/40'}`}
                    >
                       {isUploading ? (
                           <>
                              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                              Converting...
+                          </>
+                      ) : isOptimizing ? (
+                          <>
+                             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                             Optimizing...
                           </>
                       ) : (
                           "Convert to Excel"
