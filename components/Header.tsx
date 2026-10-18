@@ -60,8 +60,8 @@ export function Header() {
                     </label>
                 </div>
 
-                {/* Follow Me Button (Hidden on Mobile) */}
-                <button className="hidden sm:inline-flex h-8 items-center justify-center rounded-full bg-primary px-4 text-xs font-medium text-primary-foreground shadow hover:bg-primary/90">
+                {/* Follow Me Button */}
+                <button className="hidden min-[420px]:inline-flex h-8 items-center justify-center rounded-full bg-primary px-3 sm:px-4 text-xs font-medium text-primary-foreground shadow hover:bg-primary/90">
                     Support me
                 </button>
 
@@ -107,6 +107,16 @@ export function Header() {
                 <a href="#works" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>How it works</a>
                 <a href="#features" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Features</a>
                 <a href="#why" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Why?</a>
+                
+                {/* Mobile Support Me Button */}
+                <div className="pt-2 border-t border-border/40 flex justify-center">
+                    <button 
+                      className="w-full h-10 px-6 rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow-md hover:bg-primary/90 transition-all flex items-center justify-center cursor-pointer"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                        Support me
+                    </button>
+                </div>
             </motion.div>
           )}
         </AnimatePresence>
