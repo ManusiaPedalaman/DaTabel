@@ -2,16 +2,10 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
-import { motion, AnimatePresence } from "framer-motion";
 
 export function Header() {
   const { setTheme, theme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
 
   return (
     <div className="sticky top-4 z-50 w-full flex justify-center px-4">
@@ -41,6 +35,7 @@ export function Header() {
                             className="themeToggleInput absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
                             checked={theme === 'dark'} 
                             onChange={() => setTheme(theme === "dark" ? "light" : "dark")}
+                            aria-label="Toggle theme"
                         />
                         <svg viewBox="0 0 20 20" className="sunMoonSvg w-full h-full fill-current">
                             <mask id="moon-mask">
@@ -77,57 +72,51 @@ export function Header() {
                   aria-label={isMenuOpen ? "Tutup menu" : "Buka menu"}
                 >
                   {/* Line 1 (Top) */}
-                  <motion.span
-                    animate={isMenuOpen ? { rotate: 45, y: 6 } : { rotate: 0, y: 0 }}
-                    transition={{ duration: 0.25, ease: "easeInOut" }}
-                    className="w-5 h-0.5 bg-foreground rounded-full block origin-center"
+                  <span
+                    className={`w-5 h-0.5 bg-foreground rounded-full block origin-center transition-all duration-200 ${
+                      isMenuOpen ? "rotate-45 translate-y-[6px]" : ""
+                    }`}
                   />
                   {/* Line 2 (Middle) */}
-                  <motion.span
-                    animate={isMenuOpen ? { opacity: 0, scaleX: 0 } : { opacity: 1, scaleX: 1 }}
-                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className="w-5 h-0.5 bg-foreground rounded-full block my-1 origin-center"
+                  <span
+                    className={`w-5 h-0.5 bg-foreground rounded-full block my-1 origin-center transition-all duration-200 ${
+                      isMenuOpen ? "opacity-0 scale-x-0" : ""
+                    }`}
                   />
                   {/* Line 3 (Bottom) */}
-                  <motion.span
-                    animate={isMenuOpen ? { rotate: -45, y: -6 } : { rotate: 0, y: 0 }}
-                    transition={{ duration: 0.25, ease: "easeInOut" }}
-                    className="w-5 h-0.5 bg-foreground rounded-full block origin-center"
+                  <span
+                    className={`w-5 h-0.5 bg-foreground rounded-full block origin-center transition-all duration-200 ${
+                      isMenuOpen ? "-rotate-45 -translate-y-[6px]" : ""
+                    }`}
                   />
                 </button>
             </div>
         </div>
 
-        {/* Mobile Menu Dropdown with Smooth Animation */}
-        <AnimatePresence>
-          {isMenuOpen && (
-            <motion.div 
-              initial={{ opacity: 0, y: -8, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8, scale: 0.96 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="md:hidden absolute top-full left-0 w-full mt-2 p-4 bg-background/95 backdrop-blur-xl border border-border/40 rounded-2xl shadow-xl flex flex-col gap-4 text-center overflow-hidden"
-            >
-                <a href="#home" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Home</a>
-                <a href="#works" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>How it works</a>
-                <a href="#features" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Features</a>
-                <a href="#why" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Why?</a>
-                
-                {/* Mobile Support Me Button */}
-                <div className="pt-2 border-t border-border/40 flex justify-center">
-                    <a 
-                      href="https://saweria.co/ANDM"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full h-10 px-6 rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow-md hover:bg-primary/90 transition-all flex items-center justify-center cursor-pointer"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                        Support me
-                    </a>
-                </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Mobile Menu Dropdown with CSS Transition */}
+        {isMenuOpen && (
+          <div 
+            className="md:hidden absolute top-full left-0 w-full mt-2 p-4 bg-background/95 backdrop-blur-xl border border-border/40 rounded-2xl shadow-xl flex flex-col gap-4 text-center overflow-hidden transition-all duration-200 ease-out"
+          >
+              <a href="#home" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Home</a>
+              <a href="#works" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>How it works</a>
+              <a href="#features" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Features</a>
+              <a href="#why" className="text-sm font-medium hover:text-primary transition-colors py-2" onClick={() => setIsMenuOpen(false)}>Why?</a>
+              
+              {/* Mobile Support Me Button */}
+              <div className="pt-2 border-t border-border/40 flex justify-center">
+                  <a 
+                    href="https://saweria.co/ANDM" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-full h-10 px-6 rounded-full bg-primary text-xs font-semibold text-primary-foreground shadow-md hover:bg-primary/90 transition-all flex items-center justify-center cursor-pointer"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                      Support me
+                  </a>
+              </div>
+          </div>
+        )}
       </header>
     </div>
   );

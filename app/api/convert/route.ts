@@ -56,21 +56,20 @@ Return ONLY raw JSON with this exact schema. Do NOT wrap in markdown code fences
   ]
 }`;
 
-    // Priority models with fallback
     const candidateModels = ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
 
-    const generateContentWithRetry = async (contents: any) => {
-      let lastError: any = null;
+    const generateContentWithRetry = async (contents: unknown) => {
+      let lastError: unknown = null;
       for (const model of candidateModels) {
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
             return await ai.models.generateContent({
               model,
-              contents,
+              contents: contents as any, // eslint-disable-line @typescript-eslint/no-explicit-any
             });
-          } catch (err: any) {
+          } catch (err: unknown) {
             lastError = err;
-            const errMsg = String(err?.message || '');
+            const errMsg = err instanceof Error ? err.message : String(err || '');
             if (errMsg.includes('503') || errMsg.includes('high demand') || errMsg.includes('UNAVAILABLE') || errMsg.includes('429')) {
               // Wait 1.5s before retry or fallback
               await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -112,7 +111,20 @@ Return ONLY raw JSON with this exact schema. Do NOT wrap in markdown code fences
         // Clean markdown code fences if present
         text = text.replace(/^```(?:json|csv)?\s*/gi, '').replace(/\s*```$/gi, '').trim();
 
-        let tableData: any = null;
+        let tableData: {
+          title?: string;
+          has_all_borders?: boolean;
+          border_color?: string;
+          rows: Array<Array<{
+            text: string;
+            bg_color: string | null;
+            text_color: string | null;
+            bold: boolean;
+            align: 'left' | 'center' | 'right';
+            border?: boolean;
+            col_span?: number;
+          }>>;
+        } | null = null;
 
         // Try parsing JSON from Gemini
         try {
@@ -120,27 +132,31 @@ Return ONLY raw JSON with this exact schema. Do NOT wrap in markdown code fences
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             if (parsed && Array.isArray(parsed.rows)) {
-              const sanitizedRows = parsed.rows.map((row: any[]) => {
+              const sanitizedRows = (parsed.rows as unknown[]).map((row: unknown) => {
                 if (!Array.isArray(row)) return [];
-                return row.map((cell: any) => {
+                return row.map((cell: unknown) => {
                   if (typeof cell === 'string') {
                     return {
                       text: cell,
                       bg_color: null,
                       text_color: null,
                       bold: false,
-                      align: 'left',
+                      align: 'left' as const,
                       col_span: 1
                     };
                   }
+                  const cellObj = typeof cell === 'object' && cell !== null ? (cell as Record<string, unknown>) : null;
+                  const alignVal = cellObj && typeof cellObj.align === 'string' && ['left', 'center', 'right'].includes(cellObj.align) 
+                    ? (cellObj.align as 'left' | 'center' | 'right') 
+                    : ('left' as const);
                   return {
-                    text: String(cell?.text ?? ''),
-                    bg_color: typeof cell?.bg_color === 'string' && cell.bg_color.startsWith('#') ? cell.bg_color : null,
-                    text_color: typeof cell?.text_color === 'string' && cell.text_color.startsWith('#') ? cell.text_color : null,
-                    bold: Boolean(cell?.bold),
-                    align: ['left', 'center', 'right'].includes(cell?.align) ? cell.align : 'left',
-                    border: cell?.border !== undefined ? Boolean(cell.border) : undefined,
-                    col_span: typeof cell?.col_span === 'number' && cell.col_span > 1 ? cell.col_span : 1
+                    text: String(cellObj?.text ?? ''),
+                    bg_color: typeof cellObj?.bg_color === 'string' && cellObj.bg_color.startsWith('#') ? cellObj.bg_color : null,
+                    text_color: typeof cellObj?.text_color === 'string' && cellObj.text_color.startsWith('#') ? cellObj.text_color : null,
+                    bold: Boolean(cellObj?.bold),
+                    align: alignVal,
+                    border: cellObj?.border !== undefined ? Boolean(cellObj.border) : undefined,
+                    col_span: typeof cellObj?.col_span === 'number' && cellObj.col_span > 1 ? cellObj.col_span : 1
                   };
                 });
               });
@@ -170,7 +186,7 @@ Return ONLY raw JSON with this exact schema. Do NOT wrap in markdown code fences
               bg_color: null,
               text_color: null,
               bold: rowIdx === 0,
-              align: colIdx === 0 ? 'center' : 'left'
+              align: (colIdx === 0 ? 'center' : 'left') as 'center' | 'left'
             }));
           });
 
@@ -188,9 +204,10 @@ Return ONLY raw JSON with this exact schema. Do NOT wrap in markdown code fences
     // 4. Kembalikan array data rapi ke tampilan layar depan pengguna
     return NextResponse.json({ results });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gemini API Error:", error);
-    let errorMessage = error?.message || "Failed to process image(s) with AI";
+    const errObj = error as { message?: string };
+    let errorMessage = errObj?.message || "Failed to process image(s) with AI";
     try {
       const parsed = JSON.parse(errorMessage);
       if (parsed?.error?.message) {
